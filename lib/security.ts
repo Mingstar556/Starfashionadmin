@@ -10,7 +10,7 @@ export const orderItemSchema = z.object({
   price: z.number().positive().max(1000000),
   qty: z.number().int().positive().max(1000),
   size: z.string().min(1).max(20),
-  image: z.string().max(2000).optional(),
+  image: z.string().max(10000000).optional(),
   stock: z.number().int().nonnegative().optional(),
 }).passthrough();
 
