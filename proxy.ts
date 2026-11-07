@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
   if (path !== '/login' && !path.startsWith('/api') && !path.startsWith('/_next')) {
