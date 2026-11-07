@@ -35,9 +35,22 @@ export default function AdminProductsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
+  const [availableCategories, setAvailableCategories] = useState<string[]>(['starboy', 'old_money', 'casual', 'streetwear']);
+
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
+
+  async function fetchCategories() {
+    try {
+      const { data } = await supabaseAdmin.from('store_settings').select('categories').eq('id', 'main').single();
+      if (data && Array.isArray(data.categories) && data.categories.length > 0) {
+        const formatted = data.categories.map((c: string) => c.toLowerCase().trim().replace(/\s+/g, '_'));
+        setAvailableCategories(Array.from(new Set(['starboy', 'old_money', 'casual', 'streetwear', ...formatted])));
+      }
+    } catch {}
+  }
 
   async function fetchProducts() {
     setLoading(true);
@@ -336,16 +349,35 @@ export default function AdminProductsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 text-sm font-mono focus:outline-none focus:border-white text-white"
-                  >
-                    <option value="starboy">Starboy</option>
-                    <option value="old_money">Old Money</option>
-                    <option value="casual">Casual</option>
-                    <option value="streetwear">Streetwear</option>
-                  </select>
+                  <div className="space-y-1.5">
+                    <select
+                      value={availableCategories.includes(category) ? category : 'custom'}
+                      onChange={(e) => {
+                        if (e.target.value !== 'custom') {
+                          setCategory(e.target.value);
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 text-sm font-mono focus:outline-none focus:border-white text-white"
+                    >
+                      {availableCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat.replace(/_/g, ' ').toUpperCase()}
+                        </option>
+                      ))}
+                      <option value="custom">+ Custom / New Category</option>
+                    </select>
+
+                    {/* Custom Category Input if not in predefined list */}
+                    {(!availableCategories.includes(category) || category === 'custom') && (
+                      <input
+                        type="text"
+                        placeholder="Enter custom category name (e.g. vintage)..."
+                        value={category === 'custom' ? '' : category}
+                        onChange={(e) => setCategory(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                        className="w-full px-4 py-2 bg-zinc-950 border border-zinc-700 text-xs font-mono text-white focus:outline-none focus:border-white"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
