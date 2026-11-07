@@ -29,8 +29,12 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      // Generate memorable short ID (e.g. SF-7K9A or PROD-4F2A)
+      const shortCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const generatedId = `SF-${shortCode}`;
+      
       const newProduct: Product = {
-        id: item.id || 'prod-' + (Date.now() + i),
+        id: item.id ? String(item.id).trim() : generatedId,
         name: item.name || 'New Product',
         description: item.description || '',
         price: Number(item.price) || 0,

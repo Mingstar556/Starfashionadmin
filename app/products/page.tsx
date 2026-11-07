@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabaseAdmin } from '@/lib/supabase';
-import { Plus, Trash2, Edit, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, X, Loader2, Search } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -19,6 +19,7 @@ interface Product {
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -44,6 +45,16 @@ export default function AdminProductsPage() {
     }
     setLoading(false);
   }
+
+  const filteredProducts = products.filter((p) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      p.id.toLowerCase().includes(q) ||
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q)
+    );
+  });
 
   const handleOpenAddModal = () => {
     setEditingId(null);
@@ -127,29 +138,51 @@ export default function AdminProductsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black uppercase tracking-tight">Product Management</h1>
-          <p className="text-xs text-zinc-400 uppercase tracking-widest font-mono mt-1">Add, edit, or remove store inventory</p>
+          <p className="text-xs text-zinc-400 uppercase tracking-widest font-mono mt-1">Add, edit, or search inventory by Product ID or Name</p>
         </div>
         <button
           onClick={handleOpenAddModal}
-          className="px-6 py-3 bg-white text-zinc-950 font-bold uppercase tracking-widest text-xs flex items-center gap-2 hover:opacity-90 transition shadow-lg"
+          className="px-6 py-3 bg-white text-zinc-950 font-bold uppercase tracking-widest text-xs flex items-center gap-2 hover:opacity-90 transition shadow-lg shrink-0"
         >
           <Plus className="w-4 h-4" /> Add Product
         </button>
       </div>
 
+      {/* Product Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+        <input
+          type="text"
+          placeholder="Search by Product ID (e.g. SF-7K9A or prod-1), Name, or Category..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-11 pr-4 py-3 bg-zinc-900 border border-zinc-800 text-sm font-mono placeholder:text-zinc-500 focus:outline-none focus:border-white text-white rounded-none transition"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500 hover:text-white"
+          >
+            CLEAR
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="py-20 text-center font-mono text-xs animate-pulse">Loading products...</div>
-      ) : products.length === 0 ? (
-        <div className="py-20 text-center font-mono text-xs text-zinc-500 uppercase">No products found.</div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="py-20 text-center font-mono text-xs text-zinc-500 uppercase">
+          {searchQuery ? `No products match "${searchQuery}"` : 'No products found.'}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <div
               key={product.id}
-              className="bg-zinc-900 border border-zinc-800 flex flex-col justify-between"
+              className="bg-zinc-900 border border-zinc-800 flex flex-col justify-between group"
             >
               <div>
                 <div className="relative aspect-[3/4] bg-zinc-950 overflow-hidden">
@@ -159,13 +192,22 @@ export default function AdminProductsPage() {
                     <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">No Image</div>
                   )}
                   {product.is_featured && (
-                    <span className="absolute top-3 left-3 bg-white text-zinc-950 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5">
+                    <span className="absolute top-3 left-3 bg-white text-zinc-950 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 shadow">
                       Featured
                     </span>
                   )}
+                  {/* Short ID Badge on Image */}
+                  <span className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-sm text-zinc-200 text-[11px] font-mono font-bold px-2 py-0.5 border border-zinc-700 shadow">
+                    ID: {product.id}
+                  </span>
                 </div>
                 <div className="p-6 space-y-2">
-                  <span className="text-[10px] font-mono uppercase text-zinc-400">{product.category}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase text-zinc-400">{product.category}</span>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5">
+                      #{product.id}
+                    </span>
+                  </div>
                   <h3 className="font-bold text-sm line-clamp-1">{product.name}</h3>
                   <p className="font-mono font-bold text-sm">${product.price.toFixed(2)}</p>
                   <p className="text-xs text-zinc-400 font-mono">Stock: {product.stock} | Sizes: {product.sizes.join(', ')}</p>
