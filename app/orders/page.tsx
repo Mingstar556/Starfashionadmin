@@ -22,11 +22,15 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(true);
+    const interval = setInterval(() => {
+      fetchOrders(false);
+    }, 3000);
+    return () => clearInterval(interval);
   }, [filter]);
 
-  async function fetchOrders() {
-    setLoading(true);
+  async function fetchOrders(showLoading = false) {
+    if (showLoading) setLoading(true);
     let query = supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
     if (filter !== 'all') {
       query = query.eq('status', filter);
@@ -35,7 +39,7 @@ export default function AdminOrdersPage() {
     if (!error && data) {
       setOrders(data);
     }
-    setLoading(false);
+    if (showLoading) setLoading(false);
   }
 
   const updateOrderStatus = async (orderId: string, newStatus: 'approved' | 'rejected') => {

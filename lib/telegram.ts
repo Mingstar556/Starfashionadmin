@@ -10,19 +10,23 @@ import { readDB, writeDB } from './db';
 export const DEFAULT_BOT_TOKEN = '9030995366:AAEHWxM0u8mzNIUnDutvhUOiZYOSPn8OmoY';
 
 export function getTelegramConfig() {
-  let chatId = process.env.TELEGRAM_CHAT_ID || '';
+  let chatId = '';
   let botToken = process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN;
 
   try {
     const db = readDB();
-    if (!chatId && db.store_settings?.admin_telegram_chat_id) {
-      chatId = db.store_settings.admin_telegram_chat_id;
+    if (db.store_settings?.admin_telegram_chat_id) {
+      chatId = String(db.store_settings.admin_telegram_chat_id).trim();
     }
-    if (!botToken && db.store_settings?.telegram_bot_token) {
-      botToken = db.store_settings.telegram_bot_token;
+    if (db.store_settings?.telegram_bot_token) {
+      botToken = String(db.store_settings.telegram_bot_token).trim();
     }
   } catch (err) {
     console.error('Error reading telegram config from DB:', err);
+  }
+
+  if (!chatId) {
+    chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
   }
 
   return { botToken, chatId };
@@ -98,6 +102,7 @@ export async function sendTelegramOrderNotification(order: {
 
   const paymentLabel = order.payment_method === 'KHQR' ? '🏦 KHQR Scan (Mobile Bank)' : '💵 Cash on Delivery (COD)';
 
+  // Build the receipt caption
   const message = `🛍️ *NEW STARFASHION ORDER RECEIPT*
 🔖 *Order ID:* \`#${shortId}\`
 📅 *Date:* ${dateStr} at ${timeStr}
@@ -121,19 +126,52 @@ ${itemsText}
 ━━━━━━━━━━━━━━━━━━━━━
 👇 *ACTIONS FOR ADMIN:*`;
 
+  // Explicit Accept / Reject buttons (plus 1-click chat)
   const inlineKeyboard = {
     inline_keyboard: [
       [
-        { text: `💬 Chat with @${cleanUsername}`, url: `https://t.me/${cleanUsername}` },
-        { text: `📞 Call Customer`, url: `tel:${cleanPhone}` },
+        { text: '✅ Accept Order', callback_data: `approve_${order.id}` },
+        { text: '❌ Reject Order', callback_data: `reject_${order.id}` },
       ],
       [
-        { text: '✅ Approve Order', callback_data: `approve_${order.id}` },
-        { text: '❌ Reject Order', callback_data: `reject_${order.id}` },
+        { text: `💬 Chat with @${cleanUsername}`, url: `https://t.me/${cleanUsername}` },
       ],
     ],
   };
 
+  // Primary product photo
+  const primaryImage =
+    order.items?.find((i) => i.image && i.image.startsWith('http'))?.image ||
+    'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=800&auto=format&fit=crop';
+
+  // 1. Try sending as Photo with Caption (Visual Product Picture + Receipt)
+  if (primaryImage && primaryImage.startsWith('http')) {
+    try {
+      const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: primaryImage,
+          caption: message,
+          parse_mode: 'Markdown',
+          reply_markup: inlineKeyboard,
+        }),
+      });
+
+      const photoData = await photoRes.json();
+      if (photoData.ok && photoData.result) {
+        console.log(`[Telegram] Order photo receipt #${shortId} sent successfully to chat ${chatId}!`);
+        return photoData.result.message_id as number;
+      } else {
+        console.warn('[Telegram] sendPhoto failed, falling back to sendMessage:', photoData);
+      }
+    } catch (err) {
+      console.warn('[Telegram] sendPhoto network error, falling back to sendMessage:', err);
+    }
+  }
+
+  // 2. Fallback to standard text message if photo delivery failed
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
@@ -148,7 +186,7 @@ ${itemsText}
 
     const data = await response.json();
     if (data.ok && data.result) {
-      console.log(`[Telegram] Order receipt #${shortId} sent successfully to chat ${chatId}!`);
+      console.log(`[Telegram] Order text receipt #${shortId} sent successfully to chat ${chatId}!`);
       return data.result.message_id as number;
     } else {
       console.error('[Telegram] API error:', data);
@@ -177,6 +215,24 @@ export async function editTelegramMessageStatus(
     buttons.push([{ text: `💬 Chat with @${cleanUser}`, url: `https://t.me/${cleanUser}` }]);
   }
 
+  // 1. Try editMessageCaption first (for photo receipts)
+  try {
+    const captionRes = await fetch(`https://api.telegram.org/bot${botToken}/editMessageCaption`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: targetChatId,
+        message_id: messageId,
+        caption: newText,
+        parse_mode: 'Markdown',
+        reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined,
+      }),
+    });
+    const captionData = await captionRes.json();
+    if (captionData.ok) return true;
+  } catch {}
+
+  // 2. Fallback to editMessageText (for plain text receipts)
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
       method: 'POST',
@@ -190,7 +246,7 @@ export async function editTelegramMessageStatus(
       }),
     });
     const data = await response.json();
-    return data.ok;
+    return Boolean(data.ok);
   } catch (error) {
     console.error('[Telegram] Failed to edit message status:', error);
     return false;

@@ -18,15 +18,19 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchOrders() {
-      setLoading(true);
+    async function fetchOrders(showLoading = false) {
+      if (showLoading) setLoading(true);
       const { data, error } = await supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
       if (!error && data) {
         setOrders(data);
       }
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-    fetchOrders();
+    fetchOrders(true);
+    const interval = setInterval(() => {
+      fetchOrders(false);
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalRevenue = orders
