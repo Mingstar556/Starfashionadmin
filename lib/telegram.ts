@@ -69,6 +69,14 @@ export async function sendTelegramOrderNotification(order: {
   const cleanPhone = order.telegram_phone.trim();
   const shortId = order.id.slice(0, 8).toUpperCase();
 
+  const { escapeTelegramMarkdown } = await import('./security').catch(() => ({
+    escapeTelegramMarkdown: (s: string) => s.replace(/([_*`\[\]])/g, '\\$1'),
+  }));
+
+  const safeUsername = escapeTelegramMarkdown(cleanUsername);
+  const safePhone = escapeTelegramMarkdown(cleanPhone);
+  const safeAddress = escapeTelegramMarkdown(order.address);
+
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', {
     month: 'short',
@@ -84,7 +92,7 @@ export async function sendTelegramOrderNotification(order: {
   const itemsText = order.items
     .map(
       (item, idx) =>
-        `${idx + 1}. *${item.name}*\n   📏 Size: \`${item.size}\` | 🔢 Qty: \`${item.qty}\` | 💵 \`$${(item.price * item.qty).toFixed(2)}\``
+        `${idx + 1}. *${escapeTelegramMarkdown(item.name)}*\n   📏 Size: \`${escapeTelegramMarkdown(item.size)}\` | 🔢 Qty: \`${item.qty}\` | 💵 \`$${(item.price * item.qty).toFixed(2)}\``
     )
     .join('\n');
 
@@ -96,10 +104,10 @@ export async function sendTelegramOrderNotification(order: {
 
 ━━━━━━━━━━━━━━━━━━━━━
 👤 *CUSTOMER CONTACT INFORMATION*
-• *Telegram Username:* @${cleanUsername}
-• *Phone Number:* \`${cleanPhone}\`
+• *Telegram Username:* @${safeUsername}
+• *Phone Number:* \`${safePhone}\`
 • *Delivery Address:*
-  📍 ${order.address}
+  📍 ${safeAddress}
 
 ━━━━━━━━━━━━━━━━━━━━━
 📦 *ORDERED ITEMS (${order.items.length})*
@@ -229,7 +237,7 @@ export async function sendTestReceiptNotification(targetChatId?: string | number
       { name: 'Tailored Wide-Leg Trousers', size: 'M', qty: 1, price: 145 },
     ],
     total_price: 465,
-    payment_method: 'KHQR / ABA Bank',
+    payment_method: 'KHQR',
   };
 
   const res = await sendTelegramOrderNotification(testOrder);
